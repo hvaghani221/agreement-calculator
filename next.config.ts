@@ -4,7 +4,7 @@ const nextConfig: NextConfig = {
   /* config options here */
   reactStrictMode: true,
   output: 'export',
-  basePath: "/calculator/v3",
+  basePath: "/agreement-calculator",
 };
 
 export default nextConfig;
