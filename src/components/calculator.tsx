@@ -11,13 +11,15 @@ interface Config {
   hasIdealCompletion: boolean
   hasGradingRubrics: boolean
   penalizeMismatchedSeven: boolean
+  mismatchedSevenPenalty: number
 }
 
 const defaultConfig: Config = {
   completions: 4,
   hasIdealCompletion: false,
   hasGradingRubrics: false,
-  penalizeMismatchedSeven: false
+  penalizeMismatchedSeven: false,
+  mismatchedSevenPenalty: 0.5,
 }
 
 export default function RatingCalculator() {
@@ -96,7 +98,7 @@ export default function RatingCalculator() {
     if (config.penalizeMismatchedSeven) {
       for (let i = 0; i < originalRatings.length; i++) {
         if ((originalRatings[i] === 7 && suggestedRatings[i] != 7) || (originalRatings[i] != 7 && suggestedRatings[i] === 7)) {
-          relativeRatings -= 0.3
+          relativeRatings -= config.mismatchedSevenPenalty
         }
       }
     }
@@ -116,8 +118,8 @@ export default function RatingCalculator() {
       scores.push(gradingRubrics)
     }
 
-    const score = Math.pow( scores.map(Math.sqrt).reduce((sum, num) => sum + num, 0) ,2)
-    const maxScore = Math.pow(Math.sqrt(7)*scores.length, 2)
+    const score = Math.pow(scores.map(Math.sqrt).reduce((sum, num) => sum + num, 0), 2)
+    const maxScore = Math.pow(Math.sqrt(7) * scores.length, 2)
 
     const overallAgreement = 7 * score / maxScore
 
@@ -130,10 +132,16 @@ export default function RatingCalculator() {
   const scores = calculateAgreement()
 
   // Validate input to ensure it's an integer between 1 and 7
-  const validateRating = (value: string): number => {
+  const validateRatingInt = (value: string): number => {
     const intValue = parseInt(value.trim().slice(-1))
     if (isNaN(intValue)) return 1
     return Math.max(1, Math.min(7, intValue))
+  }
+
+  const validateRatingFloat = (value: string): number => {
+    const floatValue = parseFloat(value)
+    if (isNaN(floatValue)) return floatValue
+    return Math.max(1, Math.min(7, floatValue))
   }
 
   const updateConfig = (key: keyof Config, value: number | boolean) => {
@@ -178,7 +186,23 @@ export default function RatingCalculator() {
             />
             <Label htmlFor="gradingRubrics">Has grading rubrics</Label>
           </div>
-          <div className="flex items-center space-x-2"></div>
+          <div className="flex items-center space-x-2">
+            {config.penalizeMismatchedSeven && (
+              <div>
+                <Label htmlFor="mispatchPenalty">Penalty for Mismatched 7 Ratings</Label>
+                <Input
+                  id="mispatchPenalty"
+                  type="number"
+                  min="0"
+                  max="7"
+                  step="0.1"
+                  value={config.mismatchedSevenPenalty}
+                  onChange={(e) => updateConfig('mismatchedSevenPenalty', Math.max(0, parseFloat(e.target.value)))}
+                />
+              </div>
+            )}
+
+          </div>
           <div className="flex items-center space-x-2">
             <Checkbox
               id="penalizeMismatchedSeven"
@@ -197,22 +221,26 @@ export default function RatingCalculator() {
           <div className="grid grid-cols-[120px_1fr] gap-4">
             <Label className="text-lg">Original Rating</Label>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              {originalRatings.map((rating, idx) => (
-                <Input
-                  key={`original-${idx}`}
-                  type="number"
-                  min="1"
-                  max="7"
-                  value={rating || ''}
-                  onChange={(e) => {
-                    const newRatings = [...originalRatings]
-                    newRatings[idx] = validateRating(e.target.value)
-                    setOriginalRatings(newRatings)
-                  }}
-                  className="text-center"
-                  placeholder={getPlaceholderLetter(idx)}
-                />
-              ))}
+              {originalRatings.map((rating, idx) => {
+                const isMismatchedSeven = rating === 7 && suggestedRatings[idx] !== 7;
+
+                return (
+                  <Input
+                    key={`original-${idx}`}
+                    type="number"
+                    min="1"
+                    max="7"
+                    value={rating || ''}
+                    onChange={(e) => {
+                      const newRatings = [...originalRatings];
+                      newRatings[idx] = validateRatingInt(e.target.value);
+                      setOriginalRatings(newRatings);
+                    }}
+                    className={`text-center ${isMismatchedSeven ? 'border-red-500' : ''}`}
+                    placeholder={getPlaceholderLetter(idx)}
+                  />
+                );
+              })}
             </div>
           </div>
         </div>
@@ -222,8 +250,10 @@ export default function RatingCalculator() {
           <div className="grid grid-cols-[120px_1fr] gap-4">
             <Label className="text-lg">Suggested Rating</Label>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              {suggestedRatings.map((rating, idx) => (
-                <Input
+              {suggestedRatings.map((rating, idx) => {
+                // const isMismatchedSeven = rating === 7 && originalRatings[idx] !== 7;
+                const isMismatchedSeven = false;
+                return <Input
                   key={`suggested-${idx}`}
                   type="number"
                   min="1"
@@ -231,13 +261,13 @@ export default function RatingCalculator() {
                   value={rating || ''}
                   onChange={(e) => {
                     const newRatings = [...suggestedRatings]
-                    newRatings[idx] = validateRating(e.target.value)
+                    newRatings[idx] = validateRatingInt(e.target.value)
                     setSuggestedRatings(newRatings)
                   }}
-                  className="text-center"
+                  className={`text-center ${isMismatchedSeven ? 'border-red-500' : ''}`}
                   placeholder={getPlaceholderLetter(idx)}
                 />
-              ))}
+              })}
             </div>
           </div>
         </div>
@@ -248,7 +278,7 @@ export default function RatingCalculator() {
               <Label className="text-lg">Ideal completion</Label>
               <Input
                 value={idealCompletion}
-                onChange={(e) => setIdealCompletion(validateRating(e.target.value))}
+                onChange={(e) => setIdealCompletion(validateRatingFloat(e.target.value))}
                 placeholder="Enter Ideal Completion rating"
                 type="number"
                 min="1"
@@ -261,7 +291,7 @@ export default function RatingCalculator() {
               <Label className="text-lg">Grading rubrics</Label>
               <Input
                 value={gradingRubrics}
-                onChange={(e) => setGradingRubrics(validateRating(e.target.value))}
+                onChange={(e) => setGradingRubrics(validateRatingFloat(e.target.value))}
                 placeholder="Enter grading rubrics rating"
                 type="number"
                 min="1"
